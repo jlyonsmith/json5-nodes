@@ -1,15 +1,10 @@
-use pest::{error::Error, iterators::Pair, Parser, Span};
+mod error;
+
+pub use error::{Error, Location};
+
+use pest::{iterators::Pair, Parser, Span};
 use pest_derive::Parser;
 use std::collections::BTreeMap;
-
-/// One-based line and column at which the error was detected.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Location {
-    /// The one-based line number of the error.
-    pub line: usize,
-    /// The one-based column number of the error.
-    pub column: usize,
-}
 
 impl From<&Span<'_>> for Location {
     fn from(s: &Span<'_>) -> Self {
@@ -19,7 +14,7 @@ impl From<&Span<'_>> for Location {
 }
 
 /// AST node type
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum JsonNode<'a> {
     Null(Option<Location>),
     Bool(bool, Option<Location>),
@@ -33,8 +28,8 @@ pub enum JsonNode<'a> {
 #[grammar = "json5.pest"]
 struct Json5Parser;
 
-pub fn parse<'a>(input: &'a str) -> Result<JsonNode, Error<Rule>> {
-    fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error<Rule>> {
+pub fn parse<'a>(input: &'a str) -> Result<JsonNode, Error> {
+    fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
         let span = pair.as_span();
         let location = Some(Location::from(&span));
         let node: JsonNode = match pair.as_rule() {
