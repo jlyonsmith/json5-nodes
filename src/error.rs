@@ -1,7 +1,7 @@
 use crate::Rule; // From the pest grammar
 use std::fmt::{self, Display};
 
-/// One-based line and column at which the error was detected.
+/// A location within the JSON5 file
 #[derive(Clone, Debug, PartialEq)]
 pub struct Location {
   /// The one-based line number of the error.
@@ -10,9 +10,7 @@ pub struct Location {
   pub column: usize,
 }
 
-/// A bare bones error type which currently just collapses all the underlying errors in to a single
-/// string... This is fine for displaying to the user, but not very useful otherwise. Work to be
-/// done here.
+/// This crates `Error` enum
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
   /// Errors caused by bad syntax

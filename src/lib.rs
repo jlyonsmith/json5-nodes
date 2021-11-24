@@ -24,11 +24,12 @@ pub enum JsonNode<'a> {
     Object(BTreeMap<&'a str, JsonNode<'a>>, Option<Location>),
 }
 
+/// JSON5 parser
 #[derive(Parser)]
 #[grammar = "json5.pest"]
 struct Json5Parser;
 
-pub fn parse<'a>(input: &'a str) -> Result<JsonNode, Error> {
+pub fn parse<'a>(input: &'a str) -> Result<JsonNode<'a>, Error> {
     fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
         let span = pair.as_span();
         let location = Some(Location::from(&span));
