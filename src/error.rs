@@ -2,7 +2,7 @@ use crate::Rule; // From the pest grammar
 use std::fmt::{self, Display};
 
 /// A location within the JSON5 file
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Location {
   /// The one-based line number of the error.
   pub line: usize,
@@ -13,13 +13,14 @@ pub struct Location {
 /// This crates `Error` enum
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
-  /// Errors caused by bad syntax
-  BadSyntax {
-    /// The error message.
-    msg: String,
-    /// The location of the error, if applicable.
-    location: Option<Location>,
-  },
+  /// Errors caused by a bad parse
+  Syntax(String, Option<Location>),
+  /// Errors caused by badly formatted numbers
+  NumberFormat(Option<Location>),
+  /// Errors caused by badly formatted numbers
+  NumberRange(Option<Location>),
+  /// Errors caused by bad Unicode
+  Unicode(Option<Location>),
 }
 
 impl From<pest::error::Error<Rule>> for Error {
@@ -28,17 +29,17 @@ impl From<pest::error::Error<Rule>> for Error {
       pest::error::LineColLocation::Pos((l, c)) => (l, c),
       pest::error::LineColLocation::Span((l, c), (_, _)) => (l, c),
     };
-    Error::BadSyntax {
-      msg: err.to_string(),
-      location: Some(Location { line, column }),
-    }
+    Error::Syntax(err.to_string(), Some(Location { line, column }))
   }
 }
 
 impl Display for Error {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Error::BadSyntax { ref msg, .. } => write!(formatter, "{}", msg),
+      Error::Syntax(ref msg, ..) => write!(formatter, "{}", msg),
+      Error::NumberFormat(_) => write!(formatter, "bad number format"),
+      Error::NumberRange(_) => write!(formatter, "bad number range"),
+      Error::Unicode(_) => write!(formatter, "bad Unicode characters"),
     }
   }
 }

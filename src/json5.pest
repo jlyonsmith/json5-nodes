@@ -93,9 +93,9 @@ numeric_literal = _{
   "NaN"
 }
 
-object = { "{" ~ "}" | "{" ~ pair ~ ("," ~ pair)* ~ ","? ~ "}" }
+object = { "{" ~ "}" | "{" ~ key_value ~ ("," ~ key_value)* ~ ","? ~ "}" }
 
-pair = _{ key ~ ":" ~ value }
+key_value = { key ~ ":" ~ value }
 
 single_escape_char = _{ "'" | "\"" | "\\" | "b" | "f" | "n" | "r" | "t" | "v" }
 
