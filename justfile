@@ -40,9 +40,9 @@ release OPERATION='incrPatch':
   set branch (string trim (git rev-parse --abbrev-ref HEAD 2> /dev/null))
   set name (basename (pwd))
 
-  info "Starting release of \'"$name"\' on branch \'"$branch"\'"
+  info "Starting release of '"$name"' on branch '"$branch"'"
 
-  info "Checking out "\'{$branch}\'
+  info "Checking out '"$branch"'"
   git checkout $branch
 
   info "Pulling latest"
@@ -59,12 +59,12 @@ release OPERATION='incrPatch':
   set tagDescription (cat "scratch/version.desc.txt")
 
   git rev-parse $tagName > /dev/null 2> /dev/null
-  set isNewTag (test $status -ne 0)
+  if test $status -ne 0; set isNewTag 1; end
 
-  if $isNewTag
-    info "\'"$tagName"\' is a new tag"
+  if set -q isNewTag
+    info "'"$tagName"' is a new tag"
   else
-    warning "Tag \'"$tagName"\' already exists and will not be moved"
+    warning "Tag '"$tagName"' already exists and will not be moved"
   end
 
   if test -e 'justfile' -o -e 'Justfile'
@@ -76,7 +76,7 @@ release OPERATION='incrPatch':
   if test $status -ne 0
     # Rollback
     git checkout $branch .
-    error "Tests failed \'"$name"\' on branch \'"$branch"\'"
+    error "Tests failed '"$name"' on branch '"$branch"'"
     exit 1
   end
 
@@ -86,13 +86,13 @@ release OPERATION='incrPatch':
   info "Committing version changes"
   git commit -m $tagDescription
 
-  if $isNewTag
+  if set -q isNewTag
     info "Tagging"
     git tag -a $tagName -m $tagDescription
   end
 
-  info "Pushing to \'origin\'"
-  git push --follow-tags
+  info "Pushing to 'origin'"
+  # git push --follow-tags
 
-  info "Finished release of \'"$name"\' on branch \'"$branch"\'. You can publish the crate."
+  info "Finished release of '"$name"\' on branch '"$branch"'. You can publish the crate."
   exit 0
