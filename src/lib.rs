@@ -2,9 +2,9 @@ mod error;
 
 pub use error::{Error, Location};
 
+use hashlink::linked_hash_map::LinkedHashMap;
 use pest::{iterators::Pair, Parser, Span};
 use pest_derive::Parser;
-use std::collections::BTreeMap;
 
 impl From<&Span<'_>> for Location {
     fn from(s: &Span<'_>) -> Self {
@@ -21,7 +21,7 @@ pub enum JsonNode {
     Number(f64, Option<Location>),
     String(String, Option<Location>),
     Array(Vec<JsonNode>, Option<Location>),
-    Object(BTreeMap<String, JsonNode>, Option<Location>),
+    Object(LinkedHashMap<String, JsonNode>, Option<Location>),
 }
 
 /// JSON5 parser
@@ -46,8 +46,8 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
             },
             location,
         ),
-        Rule::string | Rule::identifier => parse_string(pair)?,
-        Rule::number => parse_number(&pair)?,
+        Rule::string | Rule::identifier => JsonNode::String(parse_string(pair)?, location),
+        Rule::number => JsonNode::Number(parse_number(&pair)?, location),
         Rule::array => JsonNode::Array(
             pair.into_inner()
                 .map(parse_pair)
@@ -55,16 +55,16 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
             location,
         ),
         Rule::object => {
-            let mut map: BTreeMap<String, JsonNode> = BTreeMap::new();
+            let mut map: LinkedHashMap<String, JsonNode> = LinkedHashMap::new();
 
             println!("{:?}", pair.as_str());
 
             for pair in pair.into_inner() {
                 let mut key_value_pairs = pair.into_inner();
-                let key = key_value_pairs.next().unwrap().as_str();
+                let key = parse_string(key_value_pairs.next().unwrap())?;
                 let value = parse_pair(key_value_pairs.next().unwrap())?;
 
-                map.insert(key.to_string(), value);
+                map.insert(key, value);
             }
 
             JsonNode::Object(map, location)
@@ -75,7 +75,7 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
     Ok(node)
 }
 
-fn parse_string(pair: Pair<'_, Rule>) -> Result<JsonNode, Error> {
+fn parse_string(pair: Pair<'_, Rule>) -> Result<String, Error> {
     let location = Some(Location::from(&pair.as_span()));
     let mut result = String::new();
     let mut component_iter = pair.into_inner();
@@ -168,10 +168,10 @@ fn parse_string(pair: Pair<'_, Rule>) -> Result<JsonNode, Error> {
         }
     }
 
-    Ok(JsonNode::String(result, location))
+    Ok(result)
 }
 
-fn parse_number<'a>(pair: &Pair<'a, Rule>) -> Result<JsonNode, Error> {
+fn parse_number<'a>(pair: &Pair<'a, Rule>) -> Result<f64, Error> {
     let location = Some(Location::from(&pair.as_span()));
 
     fn is_hex_literal(s: &str) -> bool {
@@ -179,17 +179,15 @@ fn parse_number<'a>(pair: &Pair<'a, Rule>) -> Result<JsonNode, Error> {
     }
 
     match pair.as_str() {
-        "Infinity" => Ok(JsonNode::Number(f64::INFINITY, location)),
-        "-Infinity" => Ok(JsonNode::Number(f64::NEG_INFINITY, location)),
-        "NaN" | "-NaN" => Ok(JsonNode::Number(f64::NAN, location)),
-        s if is_hex_literal(s) => u32::from_str_radix(pair.as_str(), 16).map_or_else(
-            |_| Err(Error::NumberFormat(location)),
-            |n| Ok(JsonNode::Number(n as f64, location)),
-        ),
+        "Infinity" => Ok(f64::INFINITY),
+        "-Infinity" => Ok(f64::NEG_INFINITY),
+        "NaN" | "-NaN" => Ok(f64::NAN),
+        s if is_hex_literal(s) => u32::from_str_radix(pair.as_str(), 16)
+            .map_or_else(|_| Err(Error::NumberFormat(location)), |n| Ok(n as f64)),
         s => match s.parse::<f64>() {
             Ok(f) => {
                 if f.is_finite() {
-                    Ok(JsonNode::Number(f, location))
+                    Ok(f)
                 } else {
                     Err(Error::NumberRange(location))
                 }
@@ -233,80 +231,176 @@ pub fn stringify(node: &JsonNode) -> String {
 mod test {
     use super::*;
 
-    const JSON5_STRING: &str = "{a:1,b:true,c:\"xyz\",d:null,e:[1,2,3]}";
+    #[test]
+    fn test_null() {
+        assert_eq!(
+            parse("null").unwrap(),
+            JsonNode::Null(Some(Location { column: 1, line: 1 }))
+        );
+    }
 
-    fn get_node_tree() -> JsonNode {
-        JsonNode::Object(
-            BTreeMap::from([
-                (
-                    "a".to_string(),
-                    JsonNode::Number(1.0, Some(Location { line: 1, column: 4 })),
-                ),
-                (
-                    "b".to_string(),
-                    JsonNode::Bool(true, Some(Location { line: 1, column: 8 })),
-                ),
-                (
-                    "c".to_string(),
-                    JsonNode::String(
-                        "xyz".to_string(),
-                        Some(Location {
-                            line: 1,
-                            column: 15,
-                        }),
-                    ),
-                ),
-                (
-                    "d".to_string(),
-                    JsonNode::Null(Some(Location {
-                        line: 1,
-                        column: 23,
-                    })),
-                ),
-                (
-                    "e".to_string(),
-                    JsonNode::Array(
-                        vec![
-                            JsonNode::Number(
-                                1.0,
-                                Some(Location {
-                                    line: 1,
-                                    column: 31,
-                                }),
-                            ),
+    #[test]
+    fn test_bool() {
+        assert_eq!(
+            parse("true").unwrap(),
+            JsonNode::Bool(true, Some(Location { column: 1, line: 1 }))
+        );
+        assert_eq!(
+            parse("false").unwrap(),
+            JsonNode::Bool(false, Some(Location { column: 1, line: 1 }))
+        );
+    }
+
+    #[test]
+    fn test_number() {
+        assert_eq!(
+            parse("1").unwrap(),
+            JsonNode::Number(1.0, Some(Location { column: 1, line: 1 }))
+        );
+    }
+
+    #[test]
+    fn test_empty_array() {
+        assert_eq!(
+            parse("[]").unwrap(),
+            JsonNode::Array(vec![], Some(Location { column: 1, line: 1 }))
+        );
+    }
+
+    #[test]
+    fn test_array() {
+        assert_eq!(
+            parse("[1,2]").unwrap(),
+            JsonNode::Array(
+                vec![
+                    JsonNode::Number(1.0, Some(Location { column: 2, line: 1 })),
+                    JsonNode::Number(2.0, Some(Location { column: 4, line: 1 }))
+                ],
+                Some(Location { column: 1, line: 1 })
+            )
+        );
+    }
+
+    #[test]
+    fn test_empty_object() {
+        assert_eq!(
+            parse("{}").unwrap(),
+            JsonNode::Object(LinkedHashMap::new(), Some(Location { column: 1, line: 1 }))
+        );
+    }
+
+    #[test]
+    fn test_object() {
+        assert_eq!(
+            parse("{a: 1, \"b c\": 2}").unwrap(),
+            JsonNode::Object(
+                LinkedHashMap::from_iter(
+                    [
+                        (
+                            "a".to_string(),
+                            JsonNode::Number(1.0, Some(Location { column: 5, line: 1 }))
+                        ),
+                        (
+                            "b c".to_string(),
                             JsonNode::Number(
                                 2.0,
                                 Some(Location {
-                                    line: 1,
-                                    column: 33,
-                                }),
-                            ),
-                            JsonNode::Number(
-                                3.0,
+                                    column: 15,
+                                    line: 1
+                                })
+                            )
+                        ),
+                    ]
+                    .into_iter()
+                ),
+                Some(Location { column: 1, line: 1 })
+            )
+        );
+    }
+
+    #[test]
+    fn test_round_trip() {
+        const JSON5_STRING: &str = "{a:1,b:true,c:\"xyz\",d:null,e:[1,2,3],\"a b\":7}";
+        let node_tree = parse(JSON5_STRING).unwrap();
+
+        assert_eq!(
+            node_tree,
+            JsonNode::Object(
+                LinkedHashMap::from_iter(
+                    [
+                        (
+                            "a".to_string(),
+                            JsonNode::Number(1.0, Some(Location { line: 1, column: 4 })),
+                        ),
+                        (
+                            "b".to_string(),
+                            JsonNode::Bool(true, Some(Location { line: 1, column: 8 })),
+                        ),
+                        (
+                            "c".to_string(),
+                            JsonNode::String(
+                                "xyz".to_string(),
                                 Some(Location {
                                     line: 1,
-                                    column: 35,
+                                    column: 15,
                                 }),
                             ),
-                        ],
-                        Some(Location {
-                            line: 1,
-                            column: 30,
-                        }),
-                    ),
+                        ),
+                        (
+                            "d".to_string(),
+                            JsonNode::Null(Some(Location {
+                                line: 1,
+                                column: 23,
+                            })),
+                        ),
+                        (
+                            "e".to_string(),
+                            JsonNode::Array(
+                                vec![
+                                    JsonNode::Number(
+                                        1.0,
+                                        Some(Location {
+                                            line: 1,
+                                            column: 31,
+                                        }),
+                                    ),
+                                    JsonNode::Number(
+                                        2.0,
+                                        Some(Location {
+                                            line: 1,
+                                            column: 33,
+                                        }),
+                                    ),
+                                    JsonNode::Number(
+                                        3.0,
+                                        Some(Location {
+                                            line: 1,
+                                            column: 35,
+                                        }),
+                                    ),
+                                ],
+                                Some(Location {
+                                    line: 1,
+                                    column: 30,
+                                }),
+                            ),
+                        ),
+                        (
+                            "a b".to_string(),
+                            JsonNode::Number(
+                                7.0,
+                                Some(Location {
+                                    line: 1,
+                                    column: 44,
+                                }),
+                            ),
+                        ),
+                    ]
+                    .into_iter()
                 ),
-            ]),
-            Some(Location { line: 1, column: 1 }),
-        )
-    }
-
-    #[test]
-    fn test_parse() {
-        assert_eq!(parse(JSON5_STRING).unwrap(), get_node_tree());
-    }
-
-    #[test]
-    fn test_stringify() {
-        assert_eq!(stringify(&get_node_tree()), JSON5_STRING);
+                Some(Location { column: 1, line: 1 })
+            )
+        );
+        assert_eq!(stringify(&node_tree), JSON5_STRING);
     }
 }
