@@ -38,14 +38,7 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
     let location = Some(Location::from(&pair.as_span()));
     let node: JsonNode = match pair.as_rule() {
         Rule::null => JsonNode::Null(location),
-        Rule::boolean => JsonNode::Bool(
-            match pair.as_str() {
-                "true" => true,
-                "false" => false,
-                _ => unreachable!(),
-            },
-            location,
-        ),
+        Rule::boolean => JsonNode::Bool(pair.as_str() == "true", location),
         Rule::string | Rule::identifier => JsonNode::String(parse_string(pair)?, location),
         Rule::number => JsonNode::Number(parse_number(&pair)?, location),
         Rule::array => JsonNode::Array(
@@ -56,8 +49,6 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, Error> {
         ),
         Rule::object => {
             let mut map: LinkedHashMap<String, JsonNode> = LinkedHashMap::new();
-
-            println!("{:?}", pair.as_str());
 
             for pair in pair.into_inner() {
                 let mut key_value_pairs = pair.into_inner();
@@ -260,6 +251,24 @@ mod test {
     }
 
     #[test]
+    fn test_string_escapes() {
+        assert_eq!(
+            parse("\"\\b\\f\\n\\r\\t\\v\\z\\x0A\\u0041\\0\"").unwrap(),
+            JsonNode::String(
+                String::from("\u{0008}\u{000C}\n\r\t\u{000B}z\u{000A}A\u{0000}"),
+                Some(Location { column: 1, line: 1 })
+            )
+        );
+        assert_eq!(
+            parse(r#""\uD83C\uDDEF\uD83C\uDDF5""#).unwrap(),
+            JsonNode::String(
+                String::from("\u{1F1EF}\u{1F1F5}"),
+                Some(Location { column: 1, line: 1 })
+            )
+        );
+    }
+
+    #[test]
     fn test_empty_array() {
         assert_eq!(
             parse("[]").unwrap(),
@@ -316,6 +325,22 @@ mod test {
                 Some(Location { column: 1, line: 1 })
             )
         );
+    }
+
+    #[test]
+    fn test_bad_object() {
+        match parse("{a:") {
+            Err(_) => (),
+            Ok(_) => panic!("Unexpected result"),
+        }
+    }
+
+    #[test]
+    fn test_error_display() {
+        println!("{}", Error::Syntax("".to_string(), None));
+        println!("{}", Error::NumberFormat(None));
+        println!("{}", Error::NumberRange(None));
+        println!("{}", Error::Unicode(None));
     }
 
     #[test]

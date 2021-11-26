@@ -9,3 +9,5 @@ edition = "2021"
 pest = "2.1"
 pest_derive = "2.1"
 hashlink = "0.7"
+
+[dev-dependencies]
