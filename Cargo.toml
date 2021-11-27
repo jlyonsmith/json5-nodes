@@ -2,6 +2,13 @@
 name = "json5_nodes"
 version = "0.1.2"
 edition = "2021"
+description = "Parse JSON5 into nodes that retain both JSON value and input file location"
+license = "Unlicense"
+authors = ["John Lyon-Smith <john@lyon-smith.org>"]
+readme = "README.md"
+repository = "https://github.com/jlyonsmith/json5-nodes"
+categories = ["json5", "json"]
+keywords = ["parse", "json", "json5"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

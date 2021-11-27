@@ -50,7 +50,7 @@ release OPERATION='incrPatch':
 
   mkdir scratch 2> /dev/null
 
-  if not stampver {{OPERATION}} -u
+  if not stampver {{OPERATION}} -u -i version.json5
     error "Unable to generation version information"
     exit 1
   end
