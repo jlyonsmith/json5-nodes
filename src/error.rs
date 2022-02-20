@@ -10,38 +10,47 @@ pub struct Location {
   pub column: usize,
 }
 
-/// This crates `Error` enum
+/// This crates error enum
 #[derive(Clone, Debug, PartialEq)]
-pub enum Error {
+pub enum JsonError {
+  /// Node object entry was not found
+  NotFound(Option<Location>),
+  /// Node is not an object
+  NotObject(Option<Location>),
+  /// Node is not an array
+  NotArray(Option<Location>),
   /// Errors caused by a bad parse
   Syntax(String, Option<Location>),
   /// Errors caused by badly formatted numbers
   NumberFormat(Option<Location>),
-  /// Errors caused by badly formatted numbers
+  /// Errors caused by numbers out of range
   NumberRange(Option<Location>),
   /// Errors caused by bad Unicode
   Unicode(Option<Location>),
 }
 
-impl From<pest::error::Error<Rule>> for Error {
+impl From<pest::error::Error<Rule>> for JsonError {
   fn from(err: pest::error::Error<Rule>) -> Self {
     let (line, column) = match err.line_col {
       pest::error::LineColLocation::Pos((l, c)) => (l, c),
       pest::error::LineColLocation::Span((l, c), (_, _)) => (l, c),
     };
-    Error::Syntax(err.to_string(), Some(Location { line, column }))
+    JsonError::Syntax(err.to_string(), Some(Location { line, column }))
   }
 }
 
-impl Display for Error {
+impl Display for JsonError {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Error::Syntax(ref msg, ..) => write!(formatter, "{}", msg),
-      Error::NumberFormat(_) => write!(formatter, "bad number format"),
-      Error::NumberRange(_) => write!(formatter, "bad number range"),
-      Error::Unicode(_) => write!(formatter, "bad Unicode characters"),
+      JsonError::NotFound(_) => write!(formatter, "entry not found"),
+      JsonError::NotObject(_) => write!(formatter, "node is not an object"),
+      JsonError::NotArray(_) => write!(formatter, "node is not an array"),
+      JsonError::Syntax(ref msg, ..) => write!(formatter, "{}", msg),
+      JsonError::NumberFormat(_) => write!(formatter, "bad number format"),
+      JsonError::NumberRange(_) => write!(formatter, "bad number range"),
+      JsonError::Unicode(_) => write!(formatter, "bad Unicode characters"),
     }
   }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for JsonError {}
