@@ -13,12 +13,6 @@ pub struct Location {
 /// This crates error enum
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonError {
-  /// Node object entry was not found
-  NotFound(Option<Location>),
-  /// Node is not an object
-  NotObject(Option<Location>),
-  /// Node is not an array
-  NotArray(Option<Location>),
   /// Errors caused by a bad parse
   Syntax(String, Option<Location>),
   /// Errors caused by badly formatted numbers
@@ -42,10 +36,7 @@ impl From<pest::error::Error<Rule>> for JsonError {
 impl Display for JsonError {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      JsonError::NotFound(_) => write!(formatter, "entry not found"),
-      JsonError::NotObject(_) => write!(formatter, "node is not an object"),
-      JsonError::NotArray(_) => write!(formatter, "node is not an array"),
-      JsonError::Syntax(ref msg, ..) => write!(formatter, "{}", msg),
+      JsonError::Syntax(ref msg, _) => write!(formatter, "{}", msg),
       JsonError::NumberFormat(_) => write!(formatter, "bad number format"),
       JsonError::NumberRange(_) => write!(formatter, "bad number range"),
       JsonError::Unicode(_) => write!(formatter, "bad Unicode characters"),

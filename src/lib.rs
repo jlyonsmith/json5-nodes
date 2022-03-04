@@ -1,7 +1,7 @@
 mod error;
 
 pub use error::{JsonError, Location};
-pub use hashlink::linked_hash_map::LinkedHashMap;
+pub use hashlink::linked_hash_map::{Iter, LinkedHashMap};
 
 use pest::{iterators::Pair, Parser, Span};
 use pest_derive::Parser;
@@ -18,94 +18,11 @@ impl From<&Span<'_>> for Location {
 pub enum JsonNode {
   Null(Option<Location>),
   Bool(bool, Option<Location>),
-  Number(f64, Option<Location>),
+  Integer(i64, Option<Location>),
+  Float(f64, Option<Location>),
   String(String, Option<Location>),
   Array(Vec<JsonNode>, Option<Location>),
   Object(LinkedHashMap<String, JsonNode>, Option<Location>),
-}
-
-impl JsonNode {
-  /// Is the node null?
-  pub fn is_null(self: &Self) -> bool {
-    if let JsonNode::Null(_) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Is the node a boolean?
-  pub fn is_bool(self: &Self) -> bool {
-    if let JsonNode::Bool(_, _) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Is the node a number?
-  pub fn is_number(self: &Self) -> bool {
-    if let JsonNode::Number(_, _) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Is the node a string?
-  pub fn is_string(self: &Self) -> bool {
-    if let JsonNode::String(_, _) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Is the node an array?
-  pub fn is_array(self: &Self) -> bool {
-    if let JsonNode::Array(_, _) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Is the node an object?
-  pub fn is_object(self: &Self) -> bool {
-    if let JsonNode::Object(_, _) = self {
-      true
-    } else {
-      false
-    }
-  }
-
-  /// Get the node location
-  pub fn get_location(self: &Self) -> Option<Location> {
-    match self {
-      JsonNode::Null(location)
-      | JsonNode::Bool(_, location)
-      | JsonNode::Number(_, location)
-      | JsonNode::String(_, location)
-      | JsonNode::Array(_, location)
-      | JsonNode::Object(_, location) => *location,
-    }
-  }
-
-  /// Get an object node entry
-  pub fn get_object_entry(self: &Self, name: &str) -> Result<&JsonNode, JsonError> {
-    if let JsonNode::Object(map, location) = self {
-      if let Some(node) = map.get(name) {
-        Ok(node)
-      } else {
-        Err(JsonError::NotFound(*location))
-      }
-    } else {
-      Err(JsonError::NotObject(self.get_location()))
-    }
-  }
-
-  // TODO: Implement Iterator for object JsonNode's
-  // TODO: Implement Iterator for array JsonNode's
 }
 
 /// JSON5 parser
@@ -124,7 +41,13 @@ fn parse_pair<'a>(pair: Pair<'a, Rule>) -> Result<JsonNode, JsonError> {
     Rule::null => JsonNode::Null(location),
     Rule::boolean => JsonNode::Bool(pair.as_str() == "true", location),
     Rule::string | Rule::identifier => JsonNode::String(parse_string(pair)?, location),
-    Rule::number => JsonNode::Number(parse_number(&pair)?, location),
+    Rule::number => {
+      if is_int(pair.as_str()) {
+        JsonNode::Integer(parse_integer(&pair)?, location)
+      } else {
+        JsonNode::Float(parse_float(&pair)?, location)
+      }
+    }
     Rule::array => JsonNode::Array(
       pair
         .into_inner()
@@ -247,19 +170,45 @@ fn parse_string(pair: Pair<'_, Rule>) -> Result<String, JsonError> {
   Ok(result)
 }
 
-fn parse_number<'a>(pair: &Pair<'a, Rule>) -> Result<f64, JsonError> {
+fn is_hex_literal(s: &str) -> bool {
+  s.len() > 2 && (&s[..2] == "0x" || &s[..2] == "0X")
+}
+
+fn is_infinite(s: &str) -> bool {
+  s == "Infinity" || s == "-Infinity"
+}
+
+fn is_nan(s: &str) -> bool {
+  s == "NaN" || s == "-NaN"
+}
+
+fn is_int(s: &str) -> bool {
+  !s.contains('.')
+    && (is_hex_literal(s) || (!s.contains('e') && !s.contains('E')))
+    && !is_infinite(s)
+    && !is_nan(s)
+}
+
+fn parse_integer(pair: &Pair<'_, Rule>) -> Result<i64, JsonError> {
   let location = Some(Location::from(&pair.as_span()));
 
-  fn is_hex_literal(s: &str) -> bool {
-    s.len() > 2 && (&s[..2] == "0x" || &s[..2] == "0X")
+  match pair.as_str() {
+    s if is_hex_literal(s) => {
+      i64::from_str_radix(&s[2..], 16).or_else(|_| Err(JsonError::NumberFormat(location)))
+    }
+    s => s
+      .parse::<i64>()
+      .or_else(|_| Err(JsonError::NumberFormat(location))),
   }
+}
+
+fn parse_float<'a>(pair: &Pair<'a, Rule>) -> Result<f64, JsonError> {
+  let location = Some(Location::from(&pair.as_span()));
 
   match pair.as_str() {
     "Infinity" => Ok(f64::INFINITY),
     "-Infinity" => Ok(f64::NEG_INFINITY),
     "NaN" | "-NaN" => Ok(f64::NAN),
-    s if is_hex_literal(s) => u32::from_str_radix(pair.as_str(), 16)
-      .map_or_else(|_| Err(JsonError::NumberFormat(location)), |n| Ok(n as f64)),
     s => match s.parse::<f64>() {
       Ok(f) => {
         if f.is_finite() {
@@ -297,7 +246,8 @@ pub fn stringify(node: &JsonNode) -> String {
       format!("[{}]", contents.join(","))
     }
     String(s, _) => format!("\"{}\"", s),
-    Number(n, _) => format!("{}", n),
+    Integer(i, _) => format!("{}", i),
+    Float(f, _) => format!("{}", f),
     Bool(b, _) => format!("{}", b),
     Null(_) => format!("null"),
   }
@@ -328,10 +278,18 @@ mod test {
   }
 
   #[test]
-  fn test_number() {
+  fn test_integer() {
     assert_eq!(
       parse("1").unwrap(),
-      JsonNode::Number(1.0, Some(Location { column: 1, line: 1 }))
+      JsonNode::Integer(1, Some(Location { column: 1, line: 1 }))
+    );
+  }
+
+  #[test]
+  fn test_float() {
+    assert_eq!(
+      parse("Infinity").unwrap(),
+      JsonNode::Float(f64::INFINITY, Some(Location { column: 1, line: 1 }))
     );
   }
 
@@ -364,11 +322,11 @@ mod test {
   #[test]
   fn test_array() {
     assert_eq!(
-      parse("[1,2]").unwrap(),
+      parse("[1.0,2.0]").unwrap(),
       JsonNode::Array(
         vec![
-          JsonNode::Number(1.0, Some(Location { column: 2, line: 1 })),
-          JsonNode::Number(2.0, Some(Location { column: 4, line: 1 }))
+          JsonNode::Float(1.0, Some(Location { column: 2, line: 1 })),
+          JsonNode::Float(2.0, Some(Location { column: 6, line: 1 }))
         ],
         Some(Location { column: 1, line: 1 })
       )
@@ -392,12 +350,12 @@ mod test {
           [
             (
               "a".to_string(),
-              JsonNode::Number(1.0, Some(Location { column: 5, line: 1 }))
+              JsonNode::Integer(1, Some(Location { column: 5, line: 1 }))
             ),
             (
               "b c".to_string(),
-              JsonNode::Number(
-                2.0,
+              JsonNode::Integer(
+                2,
                 Some(Location {
                   column: 15,
                   line: 1
@@ -430,7 +388,7 @@ mod test {
 
   #[test]
   fn test_round_trip() {
-    const JSON5_STRING: &str = "{a:1,b:true,c:\"xyz\",d:null,e:[1,2,3],\"a b\":7}";
+    const JSON5_STRING: &str = "{a:1,b:true,c:\"xyz\",d:null,e:[1,2,3],\"a b\":88}";
     let node_tree = parse(JSON5_STRING).unwrap();
 
     assert_eq!(
@@ -440,7 +398,7 @@ mod test {
           [
             (
               "a".to_string(),
-              JsonNode::Number(1.0, Some(Location { line: 1, column: 4 })),
+              JsonNode::Integer(1, Some(Location { line: 1, column: 4 })),
             ),
             (
               "b".to_string(),
@@ -467,22 +425,22 @@ mod test {
               "e".to_string(),
               JsonNode::Array(
                 vec![
-                  JsonNode::Number(
-                    1.0,
+                  JsonNode::Integer(
+                    1,
                     Some(Location {
                       line: 1,
                       column: 31,
                     }),
                   ),
-                  JsonNode::Number(
-                    2.0,
+                  JsonNode::Integer(
+                    2,
                     Some(Location {
                       line: 1,
                       column: 33,
                     }),
                   ),
-                  JsonNode::Number(
-                    3.0,
+                  JsonNode::Integer(
+                    3,
                     Some(Location {
                       line: 1,
                       column: 35,
@@ -497,8 +455,8 @@ mod test {
             ),
             (
               "a b".to_string(),
-              JsonNode::Number(
-                7.0,
+              JsonNode::Integer(
+                88,
                 Some(Location {
                   line: 1,
                   column: 44,
