@@ -1,9 +1,9 @@
 {
   vars: {
-    major: 0,
-    minor: 1,
-    patch: 3,
-    build: 20211127,
+    major: 1,
+    minor: 0,
+    patch: 0,
+    build: 20220305,
     revision: 0,
   },
   calcVars: {
