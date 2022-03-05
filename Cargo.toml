@@ -1,6 +1,6 @@
 [package]
 name = "json5_nodes"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
 description = "Parse JSON5 into nodes that retain both JSON value and input file location"
 license = "Unlicense"
