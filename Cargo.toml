@@ -10,8 +10,6 @@ repository = "https://github.com/jlyonsmith/json5-nodes"
 categories = ["parser-implementations"]
 keywords = ["parse", "json", "json5"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 pest = "2.1"
 pest_derive = "2.1"
