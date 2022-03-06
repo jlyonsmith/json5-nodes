@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "json5_nodes"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "hashlink",
  "pest",
