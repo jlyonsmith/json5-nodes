@@ -1,6 +1,6 @@
 coverage OPEN='':
   #!/usr/bin/env fish
-  set -x RUSTFLAGS '-Zinstrument-coverage'
+  set -x RUSTFLAGS '-C instrument-coverage'
   set -x LLVM_PROFILE_FILE (pwd)'/scratch/'(whoami)'-%p-%m.profraw'
   rm (pwd)/scratch/*.profraw
   cargo test --tests
@@ -10,8 +10,13 @@ coverage OPEN='':
     open target/debug/coverage/index.html
   end
 
-doc:
-  cargo doc --open
+doc OPEN='':
+  #!/usr/bin/env fish
+  if string match -r "open$' -- '{{OPEN}}'
+    cargo doc --open
+  else
+    cargo doc
+  end
 
 release OPERATION='incrPatch':
   #!/usr/bin/env fish

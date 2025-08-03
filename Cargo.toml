@@ -11,8 +11,8 @@ categories = ["parser-implementations"]
 keywords = ["parse", "json", "json5"]
 
 [dependencies]
-pest = "2.1"
-pest_derive = "2.1"
-hashlink = "0.7"
+pest = "2.8.1"
+pest_derive = "2.8.1"
+hashlink = "0.10.0"
 
 [dev-dependencies]
